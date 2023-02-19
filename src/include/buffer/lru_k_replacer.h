@@ -12,13 +12,16 @@
 
 #pragma once
 
+#include <algorithm>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
 #include "common/config.h"
+#include "common/logger.h"
 #include "common/macros.h"
 
 namespace bustub {
@@ -135,11 +138,26 @@ class LRUKReplacer {
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
+  size_t current_timestamp_{0};
+  // size_t curr_size_{0};
+  size_t replacer_size_;
+  size_t k_;
   std::mutex latch_;
+  // Map the frame id to the location in access_history_, which can be divided into evictable and non evictable.
+  std::unordered_map<frame_id_t, std::list<std::pair<frame_id_t, std::vector<size_t>>>::iterator> evictable_map_,
+      non_evictable_map_;
+  // Orderly stores frame ids and their historical accesses
+  // Vectors in the access_history_: [1-k] store the last k access timestamp, [0] store the earliest timestamp overall
+  // if no k access.
+  std::list<std::pair<frame_id_t, std::vector<size_t>>> access_history_;
+
+  inline auto PrintAccessHistory() -> void {
+    std::string s("Current Access History: ");
+    for (const auto &it : access_history_) {
+      s += std::to_string(it.first);
+    }
+    LOG_DEBUG("%s", s.c_str());
+  }
 };
 
 }  // namespace bustub

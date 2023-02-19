@@ -162,6 +162,13 @@ class ExtendibleHashTable : public HashTable<K, V> {
     size_t size_;
     int depth_;
     std::list<std::pair<K, V>> list_;
+
+    /**
+     * @brief Find the iterator of kv's pair associated with the given key in the bucket.
+     * @param key The key to be searched.
+     * @return The iterator of the key if the key is found, list_.end() otherwise.
+     */
+    auto Find(const K &key) -> decltype(list_.begin());
   };
 
  private:
@@ -196,6 +203,10 @@ class ExtendibleHashTable : public HashTable<K, V> {
   auto GetGlobalDepthInternal() const -> int;
   auto GetLocalDepthInternal(int dir_index) const -> int;
   auto GetNumBucketsInternal() const -> int;
+
+  auto FindInternal(const K &key, V &value) -> bool;
+  auto RemoveInternal(const K &key) -> bool;
+  void InsertInternal(const K &key, const V &value);
 };
 
 }  // namespace bustub

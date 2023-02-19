@@ -19,7 +19,7 @@ namespace bustub {
 
 #define B_PLUS_TREE_LEAF_PAGE_TYPE BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>
 #define LEAF_PAGE_HEADER_SIZE 28
-#define LEAF_PAGE_SIZE ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / sizeof(MappingType))
+#define LEAF_PAGE_SIZE (((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / sizeof(MappingType)) - 1)
 
 /**
  * Store indexed key and record id(record id = page id combined with slot id,
@@ -48,7 +48,18 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // helper methods
   auto GetNextPageId() const -> page_id_t;
   void SetNextPageId(page_id_t next_page_id);
+
   auto KeyAt(int index) const -> KeyType;
+  void SetKeyAt(int index, const KeyType &key);
+  auto ValueAt(int index) const -> ValueType;
+  void SetValueAt(int index, const ValueType &value);
+  auto GetArray() -> MappingType *;
+
+  auto Find(const KeyType &key, ValueType &value, const KeyComparator &comparator) -> bool;
+  auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) -> bool;
+  auto Remove(const KeyType &key, const KeyComparator &comparator) -> bool;
+
+  auto FindIndex(const KeyType &key, const KeyComparator &comparator) -> int;
 
  private:
   page_id_t next_page_id_;

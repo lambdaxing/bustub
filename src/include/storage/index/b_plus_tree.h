@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "common/rwlatch.h"
 #include "concurrency/transaction.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
@@ -22,6 +23,9 @@
 namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
+
+// Define B+ tree option type enum
+enum class BPlusTreeOpType { B_PLUS_OP_FIND = 0, B_PLUS_OP_INSERT, B_PLUS_OP_REMOVE };
 
 /**
  * Main class providing the API for the Interactive B+ Tree.
@@ -44,16 +48,12 @@ class BPlusTree {
 
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
-
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
-
   // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
-
   // return the value associated with a given key
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
-
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
 
@@ -64,22 +64,17 @@ class BPlusTree {
 
   // print the B+ tree
   void Print(BufferPoolManager *bpm);
-
   // draw the B+ tree
   void Draw(BufferPoolManager *bpm, const std::string &outf);
-
   // read data from file and insert one by one
   void InsertFromFile(const std::string &file_name, Transaction *transaction = nullptr);
-
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
  private:
   void UpdateRootPageId(int insert_record = 0);
-
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
-
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
   // member variable
@@ -89,6 +84,41 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+
+  /**
+   * root_page_id latch.
+   */
+  ReaderWriterLatch rwlatch_;
+  void LockRootPageId(bool exclusive, Transaction *transaction);
+  void UnLockRootPageId(bool exclusive);
+
+  /**
+   * Helper functions.
+   */
+
+  auto IsSafe(BPlusTreePage *page, BPlusTreeOpType op) -> bool;
+  auto IsExclusive(BPlusTreeOpType op) -> bool;
+  auto GetArrayAddr(BPlusTreePage *page) -> u_int8_t *;
+  auto GetParentAndReleaseChildren(Transaction *transaction) -> Page *;
+
+  auto FindLeafPage(const KeyType &key, BPlusTreeOpType op, Transaction *transaction, bool find_min = false)
+      -> LeafPage *;
+  auto CrabbingProtocolFetchPage(page_id_t page_id, BPlusTreeOpType op, page_id_t previous, Transaction *transaction)
+      -> BPlusTreePage *;
+  void ReleasePagesInTransaction(bool exclusive, Transaction *transaction, page_id_t previous = INVALID_PAGE_ID);
+
+  void InsertInParent(BPlusTreePage *old_page, const KeyType &key, BPlusTreePage *new_page, Transaction *transaction);
+  void SplitPage(BPlusTreePage *old_page, BPlusTreePage *new_page);
+  auto CrabbingProtocolNewPage(page_id_t *page_id, Transaction *transaction) -> Page *;
+
+  void Remove(BPlusTreePage *b_plus_page, const KeyType &key, Transaction *transaction,
+              decltype(transaction->GetPageSet()->crbegin()) transaction_riter);
+  auto RemoveKey(BPlusTreePage *b_plus_page, const KeyType &key) -> bool;
+  auto GetBrother(InternalPage *parent, page_id_t page_id, Transaction *transaction, bool *brother_is_right,
+                  KeyType &middle_key) -> BPlusTreePage *;
+  void MergeRightToLeft(BPlusTreePage *left, BPlusTreePage *right, const KeyType &middle_key, Transaction *transaction);
+  void BorrowFromBrother(InternalPage *parent, BPlusTreePage *b_plus_page, BPlusTreePage *brother,
+                         bool brother_is_right, const KeyType &middle_key);
 };
 
 }  // namespace bustub

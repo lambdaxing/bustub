@@ -150,9 +150,9 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   /** Array of buffer pool pages. */
   Page *pages_;
   /** Pointer to the disk manager. */
-  DiskManager *disk_manager_ __attribute__((__unused__));
+  DiskManager *disk_manager_;
   /** Pointer to the log manager. Please ignore this for P1. */
-  LogManager *log_manager_ __attribute__((__unused__));
+  LogManager *log_manager_;
   /** Page table for keeping track of buffer pool pages. */
   ExtendibleHashTable<page_id_t, frame_id_t> *page_table_;
   /** Replacer to find unpinned pages for replacement. */
@@ -160,6 +160,7 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   /** List of free frames that don't have any pages on them. */
   std::list<frame_id_t> free_list_;
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
+  /** This latch protects: next_page_id, free_list_ */
   std::mutex latch_;
 
   /**
@@ -177,5 +178,16 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   }
 
   // TODO(student): You may add additional private members and helper functions
+
+  /**
+   * @brief Reset the info of the page pointed by the frame_id.
+   * @param frame_id fram id of the page to reset
+   */
+  inline auto ResetPageWithFrameId(frame_id_t frame_id) -> void {
+    pages_[frame_id].ResetMemory();
+    pages_[frame_id].page_id_ = INVALID_PAGE_ID;
+    pages_[frame_id].pin_count_ = 0;
+    pages_[frame_id].is_dirty_ = false;
+  }
 };
 }  // namespace bustub

@@ -18,7 +18,7 @@ namespace bustub {
 
 #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
 #define INTERNAL_PAGE_HEADER_SIZE 24
-#define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(MappingType)))
+#define INTERNAL_PAGE_SIZE (((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(MappingType))) - 1)
 /**
  * Store n indexed keys and n+1 child pointers (page_id) within internal page.
  * Pointer PAGE_ID(i) points to a subtree in which all keys K satisfy:
@@ -41,6 +41,12 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   auto KeyAt(int index) const -> KeyType;
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
+  void SetValueAt(int index, const ValueType &value);
+
+  auto FindChild(const KeyType &key, const KeyComparator &comparator) -> ValueType;
+  void InsertToRight(const KeyType &key, const ValueType &value, const KeyComparator &comparator);
+  auto Remove(const KeyType &key, const KeyComparator &comparator) -> bool;
+  auto FindIndex(const KeyType &key, const KeyComparator &comparator) -> int;
 
  private:
   // Flexible array member for page data.
