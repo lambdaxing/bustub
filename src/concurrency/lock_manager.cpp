@@ -88,7 +88,17 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   // 进入相容性检测循环，直到满足相容性加锁条件（并且队列中位于前面的锁请求都已被分配）或成为队头。
   while (!CheckCompability(request_queue, iter)) {
     table_lock_queue->cv_.wait(queue_lock);
+    if(txn->GetState() == TransactionState::ABORTED) {
+      // 是否是一次锁升级请求
+      if (table_lock_queue->upgrading_ == txn_id) {
+        table_lock_queue->upgrading_ = INVALID_TXN_ID;
+      }
+      request_queue.erase(iter);
+      return false;
+    }
   }
+
+  // 是否是一次锁升级请求
   if (table_lock_queue->upgrading_ == txn_id) {
     table_lock_queue->upgrading_ = INVALID_TXN_ID;
   }
@@ -167,6 +177,14 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   // 进入相容性检测循环，直到满足相容性加锁条件（并且队列中位于前面的锁请求都已被分配）或成为队头。
   while (!CheckCompability(request_queue, iter)) {
     row_lock_queue->cv_.wait(queue_lock);
+    // 事务已被选死锁检测算法选为牺牲者
+    if (txn->GetState() == TransactionState::ABORTED) {
+      if (row_lock_queue->upgrading_ == txn_id) {
+        row_lock_queue->upgrading_ = INVALID_TXN_ID;
+      }
+      request_queue.erase(iter);
+      return false;
+    }
   }
 
   if (row_lock_queue->upgrading_ == txn_id) {
@@ -297,25 +315,6 @@ auto LockManager::CheckUnlockReasonability(Transaction *txn, const table_oid_t &
   return true;
 }
 
-void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {}
-
-void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {}
-
-auto LockManager::HasCycle(txn_id_t *txn_id) -> bool { return false; }
-
-auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
-  std::vector<std::pair<txn_id_t, txn_id_t>> edges(0);
-  return edges;
-}
-
-void LockManager::RunCycleDetection() {
-  while (enable_cycle_detection_) {
-    std::this_thread::sleep_for(cycle_detection_interval);
-    {  // TODO(students): detect deadlock
-    }
-  }
-}
-
 /**
  *
  *  Helper functions:
@@ -326,9 +325,14 @@ auto LockManager::CheckCompability(std::list<std::shared_ptr<LockRequest>> &requ
                                    std::list<std::shared_ptr<LockRequest>>::const_iterator iter) -> bool {
   for (auto i = request_queue.cbegin(); i != iter; i++) {
     for (auto j = request_queue.cbegin(); j != i; j++) {
-      if (!CompatibleMatrix[static_cast<int>((*i)->lock_mode_)][static_cast<int>((*j)->lock_mode_)]) {
+      if (!compatible_matrix_[static_cast<int>((*i)->lock_mode_)][static_cast<int>((*j)->lock_mode_)]) {
         return false;
       }
+    }
+  }
+  for(auto j = request_queue.cbegin(); j != iter; j++) {
+    if(!compatible_matrix_[static_cast<int>((*j)->lock_mode_)][static_cast<int>((*iter)->lock_mode_)]) {
+      return false;
     }
   }
   return true;
@@ -547,6 +551,163 @@ auto LockManager::CheckLockReasonability(Transaction *txn, LockMode lock_mode, I
     return false;
   }
   return true;
+}
+
+void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {
+  std::lock_guard<std::mutex> lock(waits_for_latch_);
+  for (auto it = waits_for_[t1].cbegin(); it != waits_for_[t1].cend(); it++) {
+    if (*it == t2) {
+      return;
+    }
+    if (*it > t2) {
+      waits_for_[t1].insert(it, t2);
+      return;
+    }
+  }
+  waits_for_[t1].push_back(t2);
+}
+
+void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
+  std::lock_guard<std::mutex> lock(waits_for_latch_);
+  for (auto it = waits_for_[t1].cbegin(); it != waits_for_[t1].cend(); it++) {
+    if (*it == t2) {
+      waits_for_[t1].erase(it);
+      return;
+    }
+  }
+}
+
+auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
+  std::vector<txn_id_t> path;
+  bool has_cycle = false;
+  std::lock_guard<std::mutex> lock(waits_for_latch_);
+  for (const auto &edges : waits_for_) {
+    has_cycle = dfs(edges.first, path);
+    if (has_cycle) {
+      break;
+    }
+  }
+
+  if (has_cycle) {
+    *txn_id = *(std::max_element(std::find(path.cbegin(), path.cend(), path.back()), path.cend()));
+  }
+  return has_cycle;
+}
+
+auto LockManager::dfs(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool {
+  if (std::find(path.cbegin(), path.cend(), txn_id) != path.cend()) {
+    // 环的终点，也是起点，入环，以便最后在线性的 vector 环中根据（最后一个）终点找到相同的起点
+    path.push_back(txn_id);
+    return true;
+  }
+  path.push_back(txn_id);
+  for (const auto &i : waits_for_[txn_id]) {
+    if (dfs(i, path)) {
+      return true;
+    }
+  }
+  path.pop_back();
+  return false;
+}
+
+auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
+  std::vector<std::pair<txn_id_t, txn_id_t>> edges(0);
+  std::lock_guard<std::mutex> lock(waits_for_latch_);
+  for (const auto &i : waits_for_) {
+    for (const auto &j : i.second) {
+      edges.emplace_back(i.first, j);
+    }
+  }
+  return edges;
+}
+
+void LockManager::RunCycleDetection() {
+  while (enable_cycle_detection_) {
+    std::this_thread::sleep_for(cycle_detection_interval);
+    {  // TODO(students): detect deadlock
+      // 根据 request queue 建图
+      auto waits_for_request = BuildWaitsForGraph();
+      txn_id_t txn_id;
+      // 循环检测直到无环
+      while (HasCycle(&txn_id)) {
+        auto txn = TransactionManager::GetTransaction(txn_id);
+        // 设置 ABORT
+        txn->SetState(TransactionState::ABORTED);
+        std::unique_lock<std::mutex> lock(waits_for_request[txn_id]->latch_);
+        // 通知等待获取同一资源的事务醒来处理
+        waits_for_request[txn_id]->cv_.notify_all();
+        // 更新 waits for graph
+        UpdateWaitsForGraph(txn_id);
+        lock.unlock();
+      }
+    }
+  }
+}
+
+void LockManager::UpdateWaitsForGraph(const txn_id_t &txn_id) {
+  std::lock_guard<std::mutex> lock(waits_for_latch_);
+  waits_for_.erase(txn_id);
+  for (auto &i : waits_for_) {
+    for (auto it = i.second.cbegin(); it != i.second.cend();) {
+      if (*it == txn_id) {
+        it = i.second.erase(it);
+      } else {
+        it++;
+      }
+    }
+  }
+}
+
+auto LockManager::BuildWaitsForGraph() -> std::unordered_map<txn_id_t, std::shared_ptr<LockRequestQueue>> {
+  std::unordered_map<txn_id_t, std::shared_ptr<LockRequestQueue>> waits_for_request;
+
+  std::unique_lock<std::mutex> lock1(table_lock_map_latch_);
+  for (const auto &iter : table_lock_map_) {
+    std::unique_lock<std::mutex> req_lock(iter.second->latch_);
+    const auto &request_queue = iter.second->request_queue_;
+    std::vector<txn_id_t> t2s;
+    for (const auto &request : request_queue) {
+      txn_id_t t1 = request->txn_id_;
+      if (TransactionManager::GetTransaction(t1)->GetState() == TransactionState::ABORTED) {
+        continue;
+      }
+      if (request->granted_) {
+        t2s.push_back(t1);
+      } else {
+        waits_for_request[t1] = iter.second;
+        for (const auto &t2 : t2s) {
+          AddEdge(t1, t2);
+        }
+      }
+    }
+    req_lock.unlock();
+  }
+  lock1.unlock();
+
+  std::unique_lock<std::mutex> lock2(row_lock_map_latch_);
+  for (const auto &iter : row_lock_map_) {
+    std::unique_lock<std::mutex> req_lock(iter.second->latch_);
+    const auto &request_queue = iter.second->request_queue_;
+    std::vector<txn_id_t> t2s;
+    for (const auto &request : request_queue) {
+      txn_id_t t1 = request->txn_id_;
+      if (TransactionManager::GetTransaction(t1)->GetState() == TransactionState::ABORTED) {
+        continue;
+      }
+      if (request->granted_) {
+        t2s.push_back(t1);
+      } else {
+        waits_for_request[t1] = iter.second;
+        for (const auto &t2 : t2s) {
+          AddEdge(t1, t2);
+        }
+      }
+    }
+    req_lock.unlock();
+  }
+  lock2.unlock();
+
+  return waits_for_request;
 }
 
 }  // namespace bustub

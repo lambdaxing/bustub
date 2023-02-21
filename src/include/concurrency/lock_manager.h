@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <condition_variable>  // NOLINT
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
@@ -312,27 +313,29 @@ class LockManager {
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;
   /** Waits-for graph representation. */
-  std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
+  std::map<txn_id_t, std::vector<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
 
-  const bool CompatibleMatrix[5][5] = {{true, true, true, true, false},
-                                       {true, true, false, false, false},
-                                       {true, false, true, false, false},
-                                       {true, false, false, false, false},
-                                       {false, false, false, false, false}};
+  auto dfs(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool;
+  auto BuildWaitsForGraph() -> std::unordered_map<txn_id_t, std::shared_ptr<LockRequestQueue>>;
+  void UpdateWaitsForGraph(const txn_id_t &txn_id);
+
+  /** */
+  const bool compatible_matrix_[5][5] = {{true, true, true, true, false},
+                                         {true, true, false, false, false},
+                                         {true, false, true, false, false},
+                                         {true, false, false, false, false},
+                                         {false, false, false, false, false}};
 
   auto CheckLockReasonability(Transaction *txn, LockMode lock_mode, IsolationLevel isolation_level, bool row) -> bool;
   auto CheckUnlockReasonability(Transaction *txn, const table_oid_t &oid, const RID &rid, bool row) -> bool;
-
   auto CheckUpgradability(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid, bool row)
       -> int;
-
   bool CheckCompability(std::list<std::shared_ptr<LockRequest>> &request_queue,
                         std::list<std::shared_ptr<LockRequest>>::const_iterator iter);
 
   void DeleteLockInTransaction(Transaction *txn, std::list<std::shared_ptr<LockRequest>>::const_iterator it, bool row);
   void InsertLockToTransaction(Transaction *txn, std::list<std::shared_ptr<LockRequest>>::const_iterator it, bool row);
-
   void UpdateTransactionState(Transaction *txn, LockMode unlocked_mode);
 };
 
