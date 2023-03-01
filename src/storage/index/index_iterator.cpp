@@ -18,6 +18,7 @@ INDEXITERATOR_TYPE::IndexIterator(Page *page, int index, BufferPoolManager *buff
     : page_(page), index_(index), buffer_pool_manager_(buffer_pool_manager) {
   if (page_ != nullptr) {
     leaf_ = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page_->GetData());
+    page->RUnlatch();
   }
 }
 
@@ -54,7 +55,6 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
 INDEX_TEMPLATE_ARGUMENTS
 void INDEXITERATOR_TYPE::Destroy() {
   auto leaf_page_id = leaf_->GetPageId();
-  page_->RUnlatch();
   buffer_pool_manager_->UnpinPage(leaf_page_id, false);
   page_ = nullptr;
   leaf_ = nullptr;
@@ -64,7 +64,6 @@ void INDEXITERATOR_TYPE::Destroy() {
 INDEX_TEMPLATE_ARGUMENTS
 void INDEXITERATOR_TYPE::Construct(page_id_t page_id) {
   page_ = buffer_pool_manager_->FetchPage(page_id);
-  page_->RLatch();  // May be deadlock !!!
   leaf_ = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page_->GetData());
   index_ = 0;
 }
