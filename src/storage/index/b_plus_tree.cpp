@@ -40,8 +40,11 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
     ReleasePagesInTransaction(false, transaction, INVALID_PAGE_ID);
     return false;
   }
-  result->resize(1);
-  bool exist = leaf->Find(key, (*result)[0], comparator_);
+  ValueType value;
+  bool exist = leaf->Find(key, value, comparator_);
+  if(exist) {
+    result->push_back(value);
+  }
   // Release transaction OR leaf page.
   ReleasePagesInTransaction(false, transaction, leaf->GetPageId());
   return exist;
