@@ -88,7 +88,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   // 进入相容性检测循环，直到满足相容性加锁条件（并且队列中位于前面的锁请求都已被分配）或成为队头。
   while (!CheckCompability(request_queue, iter)) {
     table_lock_queue->cv_.wait(queue_lock);
-    if(txn->GetState() == TransactionState::ABORTED) {
+    if (txn->GetState() == TransactionState::ABORTED) {
       // 是否是一次锁升级请求
       if (table_lock_queue->upgrading_ == txn_id) {
         table_lock_queue->upgrading_ = INVALID_TXN_ID;
@@ -330,8 +330,8 @@ auto LockManager::CheckCompability(std::list<std::shared_ptr<LockRequest>> &requ
       }
     }
   }
-  for(auto j = request_queue.cbegin(); j != iter; j++) {
-    if(!compatible_matrix_[static_cast<int>((*j)->lock_mode_)][static_cast<int>((*iter)->lock_mode_)]) {
+  for (auto j = request_queue.cbegin(); j != iter; j++) {
+    if (!compatible_matrix_[static_cast<int>((*j)->lock_mode_)][static_cast<int>((*iter)->lock_mode_)]) {
       return false;
     }
   }
@@ -582,7 +582,7 @@ auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
   bool has_cycle = false;
   std::lock_guard<std::mutex> lock(waits_for_latch_);
   for (const auto &edges : waits_for_) {
-    has_cycle = dfs(edges.first, path);
+    has_cycle = DFS(edges.first, path);
     if (has_cycle) {
       break;
     }
@@ -594,7 +594,7 @@ auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
   return has_cycle;
 }
 
-auto LockManager::dfs(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool {
+auto LockManager::DFS(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool {
   if (std::find(path.cbegin(), path.cend(), txn_id) != path.cend()) {
     // 环的终点，也是起点，入环，以便最后在线性的 vector 环中根据（最后一个）终点找到相同的起点
     path.push_back(txn_id);
@@ -602,7 +602,7 @@ auto LockManager::dfs(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool {
   }
   path.push_back(txn_id);
   for (const auto &i : waits_for_[txn_id]) {
-    if (dfs(i, path)) {
+    if (DFS(i, path)) {
       return true;
     }
   }

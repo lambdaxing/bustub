@@ -72,7 +72,7 @@ class SimpleAggregationHashTable {
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
-      if(input.aggregates_[i].IsNull()) {
+      if (input.aggregates_[i].IsNull()) {
         continue;
       }
       switch (agg_types_[i]) {
@@ -81,38 +81,37 @@ class SimpleAggregationHashTable {
           break;
         }
         case AggregationType::CountAggregate: {
-          if(result->aggregates_[i].IsNull()) {
+          if (result->aggregates_[i].IsNull()) {
             result->aggregates_[i] = ValueFactory::GetIntegerValue(1);
-          }else {
+          } else {
             result->aggregates_[i] = result->aggregates_[i].Add(ValueFactory::GetIntegerValue(1));
           }
           break;
         }
         case AggregationType::SumAggregate: {
-          if(result->aggregates_[i].IsNull()) {
+          if (result->aggregates_[i].IsNull()) {
             result->aggregates_[i] = input.aggregates_[i];
-          }else {
+          } else {
             result->aggregates_[i] = result->aggregates_[i].Add(input.aggregates_[i]);
           }
           break;
         }
         case AggregationType::MinAggregate: {
-          if(result->aggregates_[i].IsNull()) {
+          if (result->aggregates_[i].IsNull()) {
             result->aggregates_[i] = input.aggregates_[i];
-          }else {
+          } else {
             result->aggregates_[i] = result->aggregates_[i].Min(input.aggregates_[i]);
           }
           break;
         }
         case AggregationType::MaxAggregate: {
-          if(result->aggregates_[i].IsNull()) {
+          if (result->aggregates_[i].IsNull()) {
             result->aggregates_[i] = input.aggregates_[i];
-          }else {
+          } else {
             result->aggregates_[i] = result->aggregates_[i].Max(input.aggregates_[i]);
           }
           break;
-        }
-          break;
+        } break;
       }
     }
   }
@@ -169,10 +168,8 @@ class SimpleAggregationHashTable {
   /** @return Iterator to the end of the hash table */
   auto End() -> Iterator { return Iterator{ht_.cend()}; }
 
-  void InsertIntialCombine() {
-    ht_.insert({AggregateKey(), GenerateInitialAggregateValue()});
-  }
-  
+  void InsertIntialCombine() { ht_.insert({AggregateKey(), GenerateInitialAggregateValue()}); }
+
  private:
   /** The hash table is just a map from aggregate keys to aggregate values */
   std::unordered_map<AggregateKey, AggregateValue> ht_{};
@@ -232,7 +229,7 @@ class AggregationExecutor : public AbstractExecutor {
     }
     return {vals};
   }
-  
+
  private:
   /** The aggregation plan node */
   const AggregationPlanNode *plan_;

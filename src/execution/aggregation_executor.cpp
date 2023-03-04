@@ -18,8 +18,11 @@ namespace bustub {
 
 AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const AggregationPlanNode *plan,
                                          std::unique_ptr<AbstractExecutor> &&child)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_(std::move(child)), 
-    aht_(plan_->GetAggregates(), plan_->GetAggregateTypes()), aht_iterator_(aht_.Begin()) {}
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
+      child_(std::move(child)),
+      aht_(plan_->GetAggregates(), plan_->GetAggregateTypes()),
+      aht_iterator_(aht_.Begin()) {}
 
 void AggregationExecutor::Init() {
   child_->Init();
@@ -34,12 +37,12 @@ void AggregationExecutor::Init() {
   if (aht_.Begin() == aht_.End() && GetOutputSchema().GetColumnCount() == 1) {
     aht_.InsertIntialCombine();
   }
-  
+
   aht_iterator_ = aht_.Begin();
 }
 
 auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if(aht_iterator_ == aht_.End()) {
+  if (aht_iterator_ == aht_.End()) {
     return false;
   }
 
@@ -48,7 +51,7 @@ auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   values.insert(values.end(), aht_iterator_.Val().aggregates_.begin(), aht_iterator_.Val().aggregates_.end());
 
   *tuple = Tuple{values, &GetOutputSchema()};
-  
+
   ++aht_iterator_;
 
   return true;

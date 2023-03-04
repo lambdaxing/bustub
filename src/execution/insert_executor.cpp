@@ -26,7 +26,9 @@ void InsertExecutor::Init() {
 }
 
 auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if(is_end_) { return false; }
+  if (is_end_) {
+    return false;
+  }
 
   Tuple child_tuple{};
 
@@ -36,12 +38,13 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
   int32_t inserted_num = 0;
 
-  while(status) {
-    if(table_info->table_->InsertTuple(child_tuple, rid, exec_ctx_->GetTransaction())) {
+  while (status) {
+    if (table_info->table_->InsertTuple(child_tuple, rid, exec_ctx_->GetTransaction())) {
       inserted_num++;
       // Insert indexs of new tuple
-      for(auto index_info : exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_)) {
-        auto key = child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
+      for (auto index_info : exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_)) {
+        auto key =
+            child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
         index_info->index_->InsertEntry(key, *rid, exec_ctx_->GetTransaction());
       }
     }

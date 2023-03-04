@@ -316,7 +316,7 @@ class LockManager {
   std::map<txn_id_t, std::vector<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
 
-  auto dfs(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool;
+  auto DFS(txn_id_t txn_id, std::vector<txn_id_t> &path) -> bool;
   auto BuildWaitsForGraph() -> std::unordered_map<txn_id_t, std::shared_ptr<LockRequestQueue>>;
   void UpdateWaitsForGraph(const txn_id_t &txn_id);
 
@@ -331,8 +331,8 @@ class LockManager {
   auto CheckUnlockReasonability(Transaction *txn, const table_oid_t &oid, const RID &rid, bool row) -> bool;
   auto CheckUpgradability(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid, bool row)
       -> int;
-  bool CheckCompability(std::list<std::shared_ptr<LockRequest>> &request_queue,
-                        std::list<std::shared_ptr<LockRequest>>::const_iterator iter);
+  auto CheckCompability(std::list<std::shared_ptr<LockRequest>> &request_queue,
+                        std::list<std::shared_ptr<LockRequest>>::const_iterator iter) -> bool;
 
   void DeleteLockInTransaction(Transaction *txn, std::list<std::shared_ptr<LockRequest>>::const_iterator it, bool row);
   void InsertLockToTransaction(Transaction *txn, std::list<std::shared_ptr<LockRequest>>::const_iterator it, bool row);

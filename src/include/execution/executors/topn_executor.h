@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <list>
 #include <memory>
 #include <vector>
 
@@ -52,5 +53,9 @@ class TopNExecutor : public AbstractExecutor {
  private:
   /** The topn plan node to be executed */
   const TopNPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_exec_;
+
+  std::list<Tuple> topn_tuples_;
+  std::list<Tuple>::iterator topn_tuples_iter_;
 };
 }  // namespace bustub

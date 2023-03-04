@@ -42,7 +42,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   }
   ValueType value;
   bool exist = leaf->Find(key, value, comparator_);
-  if(exist) {
+  if (exist) {
     result->push_back(value);
   }
   // Release transaction OR leaf page.
