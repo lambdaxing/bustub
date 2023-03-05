@@ -20,7 +20,16 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
                                std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
-void DeleteExecutor::Init() { child_executor_->Init(); }
+void DeleteExecutor::Init() {
+  child_executor_->Init();
+
+  try {
+    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                           plan_->TableOid());
+  } catch (TransactionAbortException &e) {
+    throw ExecutionException(e.GetInfo());
+  }
+}
 
 auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (is_end_) {
@@ -36,6 +45,8 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   int32_t deleted_num = 0;
 
   while (status) {
+    exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                         plan_->TableOid(), *rid);
     if (table_info->table_->MarkDelete(*rid, exec_ctx_->GetTransaction())) {
       deleted_num++;
       // Delete indexs of new tuple
@@ -43,6 +54,8 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         auto key =
             child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
         index_info->index_->DeleteEntry(key, *rid, exec_ctx_->GetTransaction());
+        exec_ctx_->GetTransaction()->AppendIndexWriteRecord(IndexWriteRecord{
+            *rid, table_info->oid_, WType::DELETE, child_tuple, index_info->index_oid_, exec_ctx_->GetCatalog()});
       }
     }
     status = child_executor_->Next(&child_tuple, rid);

@@ -465,27 +465,27 @@ TEST(LockManagerTest, UpgradeTest1) {
   });
 
   std::thread t1([&]() {
-    // bool res;
-    // std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    // res = lock_mgr.LockTable(txn1, LockManager::LockMode::SHARED, oid);
-    // EXPECT_TRUE(res);
+    bool res;
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    res = lock_mgr.LockTable(txn1, LockManager::LockMode::SHARED, oid);
+    EXPECT_TRUE(res);
 
-    // res = lock_mgr.UnlockTable(txn1, oid);
-    // EXPECT_TRUE(res);
-    // CheckTableLockSizes(txn0, 0, 0, 0, 0, 0);
-    // CheckTableLockSizes(txn1, 0, 0, 0, 0, 0);
-    // txn_mgr.Commit(txn1);
+    res = lock_mgr.UnlockTable(txn1, oid);
+    EXPECT_TRUE(res);
+    CheckTableLockSizes(txn0, 0, 0, 0, 0, 0);
+    CheckTableLockSizes(txn1, 0, 0, 0, 0, 0);
+    txn_mgr.Commit(txn1);
   });
 
   std::thread t2([&]() {
-    // bool res;
-    // res = lock_mgr.LockTable(txn2, LockManager::LockMode::SHARED, oid);
-    // EXPECT_TRUE(res);
-    // std::this_thread::sleep_for(std::chrono::milliseconds(70));
+    bool res;
+    res = lock_mgr.LockTable(txn2, LockManager::LockMode::SHARED, oid);
+    EXPECT_TRUE(res);
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
 
-    // res = lock_mgr.UnlockTable(txn2, oid);
-    // EXPECT_TRUE(res);
-    // txn_mgr.Commit(txn2);
+    res = lock_mgr.UnlockTable(txn2, oid);
+    EXPECT_TRUE(res);
+    txn_mgr.Commit(txn2);
   });
 
   t0.join();

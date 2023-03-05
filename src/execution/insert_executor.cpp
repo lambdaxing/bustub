@@ -23,6 +23,13 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 void InsertExecutor::Init() {
   // Initialize the child executor
   child_executor_->Init();
+
+  try {
+    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                           plan_->TableOid());
+  } catch (TransactionAbortException &e) {
+    throw ExecutionException(e.GetInfo());
+  }
 }
 
 auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -46,6 +53,8 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         auto key =
             child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
         index_info->index_->InsertEntry(key, *rid, exec_ctx_->GetTransaction());
+        exec_ctx_->GetTransaction()->AppendIndexWriteRecord(IndexWriteRecord{
+            *rid, table_info->oid_, WType::INSERT, child_tuple, index_info->index_oid_, exec_ctx_->GetCatalog()});
       }
     }
     status = child_executor_->Next(&child_tuple, rid);

@@ -412,9 +412,10 @@ auto LockManager::CheckUpgradability(Transaction *txn, LockMode lock_mode, const
     /* 这里,我不清楚对于 S 而言，是否允许 table 上的 X 进行 row 上的 S */
     if (lock_mode == LockMode::SHARED && txn->GetSharedTableLockSet()->count(oid) == 0 &&
         txn->GetIntentionSharedTableLockSet()->count(oid) == 0 &&
-        txn->GetIntentionExclusiveTableLockSet()->count(oid) == 0) {
+        txn->GetIntentionExclusiveTableLockSet()->count(oid) == 0 &&
+        txn->GetExclusiveTableLockSet()->count(oid) == 0 &&
+        txn->GetSharedIntentionExclusiveTableLockSet()->count(oid) == 0) {
       txn->SetState(TransactionState::ABORTED);
-      assert(txn->GetExclusiveTableLockSet()->count(oid) == 0);
       throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_LOCK_NOT_PRESENT);
       return -1;
     }
@@ -626,6 +627,7 @@ void LockManager::RunCycleDetection() {
     std::this_thread::sleep_for(cycle_detection_interval);
     {  // TODO(students): detect deadlock
       // 根据 request queue 建图
+      waits_for_.clear();
       auto waits_for_request = BuildWaitsForGraph();
       txn_id_t txn_id;
       // 循环检测直到无环
@@ -640,6 +642,7 @@ void LockManager::RunCycleDetection() {
         UpdateWaitsForGraph(txn_id);
         lock.unlock();
       }
+      waits_for_.clear();
     }
   }
 }
